@@ -1,29 +1,17 @@
-// 센서 핀 정의
-#define IR1 A0   // 왼쪽 가장자리 센서
-#define IR2 A1   // 좌측 센서
-#define IR3 A2   // 중간 왼쪽 센서
-#define IR4 A3   // 중앙 센서
-#define IR5 A4   // 중간 오른쪽 센서
-#define IR6 A5   // 우측 센서
-#define IR7 A6   // 오른쪽 가장자리 센서
-
-// 모터 드라이버 핀 정의
-#define STBY 9   // 모터드라이버 스탠바이 핀
-#define AIN1 5
 #define AIN2 6
 #define PWMA 10
 #define BIN1 7
 #define BIN2 8
 #define PWMB 11
 
-const int threshold = 590;  // 검은색 인식 임계값
-int baseSpeed = 35;        // 기본 속도
-int minSpeed = 5;          // 최소 속도 보장
+const int threshold = 700;  // 검은색 인식 임계값
+int baseSpeed = 200;        // 기본 속도
+int minSpeed = 10;          // 최소 속도 보장
 
 // PID 변수 설정
-float Kp = 10.0;  
-float Ki = 0.1;  
-float Kd = 0.4;  
+float Kp = 60.0;  // 에러값에 비례, 속력을 바꾸는 메인임
+float Ki = 0.3;  // 이전 에러와 현재 에러의 차이에 비례, 변화를 추구
+float Kd = 2.5;  // 변화에 저항
 
 int lastError = 0;  // 이전 오차
 int integral = 0;   // 적분값
@@ -38,7 +26,7 @@ void setup() {
     pinMode(BIN2, OUTPUT);
     pinMode(PWMB, OUTPUT);
     digitalWrite(STBY, HIGH);
-    Serial.begin(9600);
+    Serial.begin(115200);
 }
 
 // 가중 평균을 사용한 error 계산 함수
@@ -78,6 +66,7 @@ void loop() {
     int correction = Kp * error + Ki * integral + Kd * derivative;
 
     lastError = error;
+    Serial.println(error);
 
     // PID 보정된 속도
     int leftSpeed = constrain(baseSpeed + correction, minSpeed, 255);
@@ -85,8 +74,8 @@ void loop() {
 
     driveMotors(leftSpeed, rightSpeed);
 
-
-    delay(500);
+    delay(50);
+  
 }
 
 // 모터 제어 함수 (코드 간소화)
