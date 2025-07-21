@@ -1,6 +1,14 @@
-#define IR2 A2   // 센서 2: 좌측 감지
-#define IR4 A4   // 센서 4: 우측 감지
-#define STBY 9   //모터드라이버 스탠바이 핀
+// 센서 핀 정의
+#define IR1 A0   // 왼쪽 가장자리 센서
+#define IR2 A1   // 좌측 센서
+#define IR3 A2   // 중간 왼쪽 센서
+#define IR4 A3   // 중앙 센서
+#define IR5 A4   // 중간 오른쪽 센서
+#define IR6 A5   // 우측 센서
+#define IR7 A6   // 오른쪽 가장자리 센서
+
+// 모터 드라이버 핀 정의
+#define STBY 9   // 모터드라이버 스탠바이 핀
 #define AIN1 5
 #define AIN2 6
 #define PWMA 10
@@ -8,10 +16,20 @@
 #define BIN2 8
 #define PWMB 11
 
-const int threshold = 590; // 검정색 인식 임계값 (1주차에 여러분들이 찾은 센서값으로 변경)
+const int threshold = 590;  // 검은색 인식 임계값
+int baseSpeed = 35;        // 기본 속도
+int minSpeed = 5;          // 최소 속도 보장
+
+// PID 변수 설정
+float Kp = 10.0;  
+float Ki = 0.1;  
+float Kd = 0.4;  
+
+int lastError = 0;  // 이전 오차
+int integral = 0;   // 적분값
 
 void setup() {
-//setup() 부분에 여러분들이 사용할 pinMode와 모터드라이버 활성화를 시켜주세요.
+  ADCSRA = (ADCSRA & B11111000) | 0x04;
     pinMode(STBY, OUTPUT);
     pinMode(AIN1, OUTPUT);
     pinMode(AIN2, OUTPUT);
@@ -19,68 +37,65 @@ void setup() {
     pinMode(BIN1, OUTPUT);
     pinMode(BIN2, OUTPUT);
     pinMode(PWMB, OUTPUT);
-    pinMode(STBY, OUTPUT);
     digitalWrite(STBY, HIGH);
     Serial.begin(9600);
 }
 
+// 가중 평균을 사용한 error 계산 함수
+int getError() {
+    int weights[7] = {-3, -2, -1, 0, 1, 2, 3};  // 센서 위치에 따른 가중치
+    int sumWeights = 0;
+    int sumValues = 0;
+
+    int sensorValues[7] = {
+        analogRead(IR1),
+        analogRead(IR2),
+        analogRead(IR3),
+        analogRead(IR4),
+        analogRead(IR5),
+        analogRead(IR6),
+        analogRead(IR7)
+    };
+
+    for (int i = 0; i < 7; i++) {
+        if (sensorValues[i] < threshold) {  // 검은색 감지 시
+            sumWeights += weights[i];
+            sumValues++;
+        }
+    }
+
+    if (sumValues == 0) return lastError;  // 검은색을 감지하지 못하면 마지막 오차 유지
+
+    return sumWeights / sumValues;
+}
+
 void loop() {
-  int IR2value = analogRead(IR2);
-  int IR4value = analogRead(IR4);
+    int error = getError();  // 가중 평균 기반 오차 계산
 
-  Serial.print("IR2value : ");
-  Serial.println(IR2value);
-  Serial.print("IR4value : ");
-  Serial.println(IR4value);
-  Serial.println("");
+    // PID 제어 계산
+    integral += error;
+    int derivative = error - lastError;
+    int correction = Kp * error + Ki * integral + Kd * derivative;
+
+    lastError = error;
+
+    // PID 보정된 속도
+    int leftSpeed = constrain(baseSpeed + correction, minSpeed, 255);
+    int rightSpeed = constrain(baseSpeed - correction, minSpeed, 255);
+
+    driveMotors(leftSpeed, rightSpeed);
 
 
-  //IR4만 검정이면 좌회전
-  if (IR4value <= threshold && IR2value > threshold) {
-    turn_left();
-  }
-  // IR2만 검정이면 우회전 
-  else if (IR2value <= threshold && IR4value > threshold) {
-    turn_right();
-  }
-  // 그 외의 경우 직진
-  else {
-    go_Motors();
-  }
+    delay(500);
 }
 
-void turn_right(){ // 라인트레이서가 멈추는 함수를 지정합니다.
-  // 좌회전을 위한 모터 제어 코드 삽입 (PWM50, PWM10 권장)
-  digitalWrite(AIN1, LOW);
-  digitalWrite(AIN2, HIGH);
-  analogWrite(PWMA, 50);
-
-  digitalWrite(BIN1, LOW);
-  digitalWrite(BIN2, HIGH);
-  analogWrite(PWMB, 10);
-}
-
-
-void turn_left(){ // 라인트레이서가 멈추는 함수를 지정합니다.
-  // 우회전을 위한 모터 제어 코드 삽입 (PWM50, PWM10 권장)
-  digitalWrite(AIN1, LOW);
-  digitalWrite(AIN2, HIGH);
-  analogWrite(PWMA, 10);
-
-  digitalWrite(BIN1, LOW);
-  digitalWrite(BIN2, HIGH);
-  analogWrite(PWMB, 50);
-}
-
-
-
-void go_Motors(){ // 라인트레이서가 직진하는 함수를 지정합니다.
-  //앞으로 직진하는 명령을 작성해주세요. (방향은 다를 수 있음 - HIGH, LOW 순서바꾸기)
+// 모터 제어 함수 (코드 간소화)
+void driveMotors(int leftSpeed, int rightSpeed) {
     digitalWrite(AIN1, LOW);
     digitalWrite(AIN2, HIGH);
-    analogWrite(PWMA, 100);
+    analogWrite(PWMA, leftSpeed);
 
     digitalWrite(BIN1, LOW);
     digitalWrite(BIN2, HIGH);
-    analogWrite(PWMB, 100);
+    analogWrite(PWMB, rightSpeed);
 }
